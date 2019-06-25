@@ -1,0 +1,169 @@
+---
+title: "US Brewery and Beer Case Study"
+author: "Dan Crouthamel, Pradeep Pradeepkumar"
+date: "`r format(Sys.time(), '%B %d, %Y')`"
+output: html_document
+---
+
+```{r setup, include=FALSE, message=FALSE, warning=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(magrittr)
+library(stats)
+library('knitr')
+pagebreak <- function() {
+  if(knitr::is_latex_output())
+    return("\\newpage")
+  else
+    return('<div style="page-break-before: always;" />')
+}
+```
+
+## Case Study Introduction
+Our client, Beer City, in Pennsylvania, is looking to expand their offering of domestic beer products. Using a recent list of 558 breweries and 2410 different beer products, we will assess some current interesting attributes about this landscape. This includes.
+
+*  Number of Breweries per State
+*  Median Alcohol Content per State (ABV)
+*  International Bitterness Unit per State (IBU)
+*  States with the highest ABV and IBU
+*  Statistical summary on ABV and the relationship between ABV and IBU
+*  Fun examination of highest ABV with low IBU
+
+### Breweries per State
+
+```{r brewPlot, fig.align='center', fig.width=11}
+brewData <- read.csv("Breweries.csv", header = TRUE)
+
+# brewSummary <- summary(brewData$State)
+# brewSummary
+
+brewTable <- brewData %>% count(State)
+names(brewTable) <- c("State","Count")
+# brewTable
+
+brewPlot <-ggplot(data=brewTable, aes(x=reorder(State, -Count), y=Count, fill=State))
+brewPlot +
+  geom_bar(stat="identity") +
+  ylab("Brewery Count") +
+  xlab("State") +
+  ggtitle("Brewery Count in the United States") +
+  theme(plot.title = element_text(hjust = 0.5), legend.position = "none")
+```
+
+The above graphic outlines the number of breweries in each state, with Colorado and California having the most.
+
+### Read Beer data, then merge with Brewery data
+
+```{r}
+# Read beer data, then merge with Brewery data
+beerData <- read.csv("Beers.csv")
+
+# Clean up some columns so that things look nice when joining the tables
+brewData %<>% rename("Brewery Name" = "Name")
+beerData %<>% rename("Beer Name" = "Name")
+beerData %<>% rename("Brew_ID" = "Brewery_id")
+
+# Using inner_join of dplyr, could have used merged too, but I like this better
+mergedData <- inner_join(brewData, beerData, by = c("Brew_ID" = "Brew_ID"))
+kable(head(mergedData))
+kable(tail(mergedData))
+```
+
+A sample of the beginning and ending of the data set appears above and includes the following observations.
+
+* Brew_ID
+* Brewery Name
+* City
+* State
+* Beer Name
+* Beer_ID
+* ABV
+* IBU
+* Style
+* Ounces
+
+### Report the number of NA's in each column
+
+```{r}
+kable(colSums(is.na(mergedData)))
+```
+
+The above graphic shows us that we have 62 NAs in the ABV column, and 1005 NAs in the IBU column.
+
+### Compute the median alcohol content and international bitterness unit for each state. Plot a bar chart to compare.
+
+```{r fig.align='center', fig.width=11}
+
+# Medians
+medianABV <- mergedData %>% group_by(State) %>% summarise(median = median(ABV, na.rm = TRUE))
+medianIBU <- mergedData %>% group_by(State) %>% summarise(median = median(IBU, na.rm = TRUE))
+
+medianABV <- mergedData %>% group_by(State) %>% summarise(median = mean(ABV, na.rm = TRUE))
+medianIBU <- mergedData %>% group_by(State) %>% summarise(median = mean(IBU, na.rm = TRUE))
+
+abvPlot <-ggplot(data=medianABV, aes(x=reorder(State,-median), y=median, fill=State))
+abvPlot +
+  geom_bar(stat="identity") +
+  ylab("Median ABV") +
+  xlab("State") +
+  ggtitle("Median ABV (Alcohol By Volume) per State") +
+  theme(plot.title = element_text(hjust = 0.5), legend.position = "top")
+
+ibuPlot <-ggplot(data=medianIBU, aes(x=reorder(State, -median), y=median, fill=State))
+ibuPlot +
+  geom_bar(stat="identity") +
+  ylab("Median IBU") +
+  xlab("State") +
+  ggtitle("Median IBU (International Bitterness Units) per State") +
+  theme(plot.title = element_text(hjust = 0.5), legend.position = "top")
+```
+
+There is no IBU data for South Dakota.
+
+### Which state has the maximum alcoholic (ABV) beer? Which state has the most bitter (IBU) beer?
+
+
+```{r}
+# Max Stuff
+maxABV <- mergedData %>% group_by(State) %>% summarise(max = max(ABV, na.rm = TRUE))
+maxABV.row <- maxABV[which.max(maxABV$max),]
+maxABV.row
+
+maxIBU <- mergedData %>% group_by(State) %>% summarise(max = max(IBU, na.rm = TRUE))
+maxIBU.row <- maxIBU[which.max(maxIBU$max),]
+maxIBU.row
+```
+
+Colorado has the highest ABV and Oregon has the highest IBU
+
+### Summary statistics for the ABV variable.
+
+```{r}
+summary(mergedData$ABV)
+#summary(mergedData$ABV[!is.na(mergedData$ABV)])
+```
+
+There are 62 cases with no ABV data, which could be non-alcoholic beer. Maybe. The lowest is .001, which is considered non alcoholic and the highest is 12.8%, which is quite high for a beer. 50% of the data lies between 5 and 6.7 % ABV, which seems typical of beer.
+
+### Is there an apparent relationship between the bitterness of the beer and its alcoholic content? Draw a scatter plot.
+
+```{r fig.align='center', fig.width=11}
+mergedData1 <- na.omit(mergedData) 
+ggplot(mergedData1[!(is.na(mergedData1$IBU)|is.na(mergedData1$ABV)),], aes(x=IBU, y=ABV)) + 
+  geom_point() + 
+  geom_smooth(method = "lm", se = TRUE)
+summary(lm(mergedData1$ABV ~ mergedData1$IBU))
+```
+
+Above we can see somewhat a linear trend between ABV and IBU. Something the should be considered though is the concept of relative bitterness vs perceived bitterness. For example, a beer that has 60 IBUs and is 6% ABV will taste about as bitter as a 90 IBU beer with 9% ABV. A higher ABV may indicate more malts, which is sweeter and will balance the precevied bitterness. So although there appears to be a weak linear trend, the average perceived bitterness could be flat (constant).
+
+### Find a beer with maximum ABV and IBU less than 50
+
+``` {r echo=TRUE}
+ibu_nona <- mergedData[!is.na(mergedData$IBU),]
+ibu_less_50 <- ibu_nona[ibu_nona$IBU < 50,]
+max_abv <- head(ibu_less_50[order(ibu_less_50$ABV, decreasing = TRUE),],1)
+name <- max_abv$`Beer Name`
+```
+
+Beer named  `r name`  has highest alcohol content at `r max_abv$ABV` and IBV value at `r max_abv$IBU`
