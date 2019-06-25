@@ -2,7 +2,7 @@
 
 # Contributors
 *  Dan Crouthamel
-*  Predeep Preedepkumar
+*  Kumaraiah Pradeepkumar
 
 # Files
 *  Beers.csv - Beer Data
